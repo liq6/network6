@@ -90,7 +90,7 @@ class NetworkViewModel: ObservableObject {
         }
         let grouped = Dictionary(grouping: withOrg) { $0 }
         return grouped.map { (name: $0.key, count: $0.value.count) }
-            .sorted { $0.count > $1.count }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     var uniqueCountries: [(name: String, code: String, flag: String, count: Int)] {
@@ -104,13 +104,13 @@ class NetworkViewModel: ObservableObject {
                 flag: countryFlag(code),
                 count: geos.count
             )
-        }.sorted { $0.count > $1.count }
+        }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     var uniqueStates: [(state: ConnectionState, count: Int)] {
         let grouped = Dictionary(grouping: connections) { $0.state }
         return grouped.map { (state: $0.key, count: $0.value.count) }
-            .sorted { $0.count > $1.count }
+            .sorted { $0.state.rawValue < $1.state.rawValue }
     }
 
     var stats: ConnectionStats {
