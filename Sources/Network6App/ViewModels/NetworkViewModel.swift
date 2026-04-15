@@ -149,11 +149,32 @@ class NetworkViewModel: ObservableObject {
     // MARK: - Actions
     func startMonitoring() async {
         isLoading = true
-        loadingStatus = "Locating you…"
-        myLocation = await geoResolver.resolveMyLocation()
-
         loadingStatus = "Scanning connections…"
-        await refresh()
+
+        // Run location resolve and first connection scan in parallel
+        async let locationTask: GeoLocation? = {
+            // 5 second timeout on geolocation
+            return await withTaskGroup(of: GeoLocation?.self) { group in
+                group.addTask { await self.geoResolver.resolveMyLocation() }
+                group.addTask {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    return nil
+                }
+                // Return whichever finishes first
+                for await result in group {
+                    if result != nil {
+                        group.cancelAll()
+                        return result
+                    }
+                }
+                return nil
+            }
+        }()
+        async let scanTask: Void = refresh()
+
+        let loc = await locationTask
+        _ = await scanTask
+        myLocation = loc
         isLoading = false
 
         monitoringTask = Task {
