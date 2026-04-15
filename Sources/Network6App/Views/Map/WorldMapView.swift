@@ -53,23 +53,28 @@ struct WorldMapView: View {
             }
 
             // Overlay panels
-            VStack {
+            VStack(spacing: 0) {
+                // Top row: Network Map stats
                 HStack(alignment: .top) {
-                    // Selected server detail widget (left)
-                    if let server = selectedServer {
-                        ServerInfoWidget(server: server, myLocation: viewModel.myLocation) {
-                            withAnimation(.easeOut(duration: 0.2)) { selectedServer = nil }
-                        }
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                    }
-
                     Spacer()
-
-                    // Stats panel (right)
                     if showStats {
                         mapStatsPanel
                     }
                 }
+                .padding([.top, .horizontal])
+
+                // Info widget below stats (right-aligned)
+                HStack(alignment: .top) {
+                    Spacer()
+                    if let server = selectedServer {
+                        ServerInfoWidget(server: server, myLocation: viewModel.myLocation) {
+                            withAnimation(.easeOut(duration: 0.2)) { selectedServer = nil }
+                        }
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
 
                 Spacer()
 
@@ -78,8 +83,8 @@ struct WorldMapView: View {
                     Spacer()
                     mapControls
                 }
+                .padding()
             }
-            .padding()
         }
     }
 
@@ -385,7 +390,7 @@ struct ServerInfoWidget: View {
             }
         }
         .frame(width: 280)
-        .frame(maxHeight: 460)
+        .frame(maxHeight: 600)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
         .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
     }
