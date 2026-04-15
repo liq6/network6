@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "Network6",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .library(
@@ -15,6 +15,10 @@ let package = Package(
         .executable(
             name: "network6",
             targets: ["Network6CLI"]
+        ),
+        .executable(
+            name: "Network6App",
+            targets: ["Network6App"]
         )
     ],
     dependencies: [
@@ -29,6 +33,12 @@ let package = Package(
             dependencies: [
                 "Network6Core",
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ]
+        ),
+        .executableTarget(
+            name: "Network6App",
+            dependencies: [
+                "Network6Core"
             ]
         ),
         .testTarget(
