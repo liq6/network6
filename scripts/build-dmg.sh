@@ -21,6 +21,22 @@ mkdir -p "$APP_DIR/MacOS" "$APP_DIR/Resources"
 cp "$BIN_PATH" "$APP_DIR/MacOS/Network6"
 chmod +x "$APP_DIR/MacOS/Network6"
 
+echo "🎨 Generating app icon..."
+ICON_SCRIPT="$PROJECT_DIR/scripts/generate-icon.swift"
+ICONSET_DIR="$DIST_DIR/AppIcon.iconset"
+mkdir -p "$ICONSET_DIR"
+
+for size in 16 32 64 128 256 512; do
+    swift "$ICON_SCRIPT" "$ICONSET_DIR/icon_${size}x${size}.png" "$size" 2>/dev/null
+    double=$((size * 2))
+    if [ $double -le 1024 ]; then
+        swift "$ICON_SCRIPT" "$ICONSET_DIR/icon_${size}x${size}@2x.png" "$double" 2>/dev/null
+    fi
+done
+
+iconutil -c icns "$ICONSET_DIR" -o "$APP_DIR/Resources/AppIcon.icns"
+rm -rf "$ICONSET_DIR"
+
 cat > "$APP_DIR/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
