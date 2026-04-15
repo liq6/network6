@@ -1,0 +1,143 @@
+import Foundation
+import Network6Core
+import ArgumentParser
+
+@main
+struct Network6App: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "network6",
+        abstract: "Monitor network connections in real-time on macOS.",
+        version: "0.1.0"
+    )
+
+    @Option(name: .shortAndLong, help: "Refresh interval in seconds.")
+    var refresh: Double = 2.0
+
+    @Option(name: .shortAndLong, help: "Filter by application name (substring match).")
+    var filter: String?
+
+    @Option(name: .shortAndLong, help: "Sort by column: app, remote, port, state, country, pid.")
+    var sort: SortColumn = .app
+
+    @Flag(name: .long, help: "Skip DNS reverse resolution.")
+    var noDns: Bool = false
+
+    @Flag(name: .long, help: "Skip GeoIP resolution.")
+    var noGeo: Bool = false
+
+    @Flag(name: .long, help: "Show only ESTABLISHED connections.")
+    var established: Bool = false
+
+    @Flag(name: .long, help: "Include LISTEN ports.")
+    var listen: Bool = false
+
+    enum SortColumn: String, ExpressibleByArgument, CaseIterable {
+        case app, remote, port, state, country, pid
+    }
+
+    func run() async throws {
+        let monitor = ConnectionMonitor()
+        let dnsResolver = DNSResolver()
+        let geoResolver = GeoIPResolver()
+        let processResolver = ProcessResolver()
+        let renderer = ConsoleRenderer()
+        let isRoot = getuid() == 0
+
+        // Setup signal handler for clean exit
+        signal(SIGINT) { _ in
+            // Show cursor, reset terminal
+            print("\u{1B}[?25h\u{1B}[0m")
+            print("\nNetwork6 stopped.")
+            Darwin.exit(0)
+        }
+
+        // Hide cursor
+        print("\u{1B}[?25l", terminator: "")
+
+        while true {
+            do {
+                var connections = try await monitor.refresh()
+
+                // Enrich with process paths
+                for i in connections.indices {
+                    let path = processResolver.resolvePath(pid: connections[i].pid)
+                    if !path.isEmpty {
+                        connections[i] = ConnectionInfo(
+                            pid: connections[i].pid,
+                            processName: connections[i].processName,
+                            processPath: path,
+                            user: connections[i].user,
+                            protocol: connections[i].protocol,
+                            state: connections[i].state,
+                            localAddress: connections[i].localAddress,
+                            localPort: connections[i].localPort,
+                            remoteAddress: connections[i].remoteAddress,
+                            remotePort: connections[i].remotePort,
+                            portLabel: connections[i].portLabel,
+                            hostname: connections[i].hostname,
+                            geoLocation: connections[i].geoLocation,
+                            firstSeen: connections[i].firstSeen
+                        )
+                    }
+                }
+
+                // DNS resolution
+                if !noDns {
+                    let ips = connections.compactMap { $0.remoteAddress.isEmpty ? nil : $0.remoteAddress }
+                    let hostnames = await dnsResolver.resolveAll(ips)
+                    for i in connections.indices {
+                        if let hostname = hostnames[connections[i].remoteAddress] {
+                            connections[i].hostname = hostname
+                        }
+                    }
+                }
+
+                // GeoIP resolution
+                if !noGeo {
+                    let ips = connections.compactMap { $0.remoteAddress.isEmpty ? nil : $0.remoteAddress }
+                    let geos = await geoResolver.resolveAll(ips)
+                    for i in connections.indices {
+                        if let geo = geos[connections[i].remoteAddress] {
+                            connections[i].geoLocation = geo
+                        }
+                    }
+                }
+
+                // Filter
+                if let filter = filter {
+                    let lowerFilter = filter.lowercased()
+                    connections = connections.filter {
+                        $0.processName.lowercased().contains(lowerFilter)
+                    }
+                }
+
+                if established {
+                    connections = connections.filter { $0.state == .established }
+                }
+
+                if !listen {
+                    connections = connections.filter { $0.state != .listen }
+                }
+
+                // Sort
+                connections.sort { a, b in
+                    switch sort {
+                    case .app: return a.processName.lowercased() < b.processName.lowercased()
+                    case .remote: return a.remoteDisplay < b.remoteDisplay
+                    case .port: return a.remotePort < b.remotePort
+                    case .state: return a.state.rawValue < b.state.rawValue
+                    case .country: return a.locationDisplay < b.locationDisplay
+                    case .pid: return a.pid < b.pid
+                    }
+                }
+
+                renderer.render(connections: connections, isRoot: isRoot)
+
+            } catch {
+                print("\u{1B}[31mError: \(error.localizedDescription)\u{1B}[0m")
+            }
+
+            try await Task.sleep(nanoseconds: UInt64(refresh * 1_000_000_000))
+        }
+    }
+}
