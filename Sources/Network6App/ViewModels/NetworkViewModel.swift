@@ -199,7 +199,6 @@ class NetworkViewModel: ObservableObject {
 
     func refresh() async {
         isRefreshing = true
-        defer { isRefreshing = false }
 
         do {
             var conns = try await monitor.refresh()
@@ -249,10 +248,17 @@ class NetworkViewModel: ObservableObject {
                 }
             }
 
-            // Track new connections
+            // Compute new IDs before publishing
             let currentIds = Set(conns.map(\.id))
             let newIds = currentIds.subtracting(previousIds)
-            newConnectionIds = newIds
+
+            // Batch all @Published updates into a single change notification
+            // to avoid reentrant NSTableView delegate calls
+            objectWillChange.send()
+            _connections = Published(wrappedValue: conns)
+            _newConnectionIds = Published(wrappedValue: newIds)
+            _lastRefresh = Published(wrappedValue: Date())
+            _isRefreshing = Published(wrappedValue: false)
 
             // Clear "new" highlight after delay
             if !newIds.isEmpty {
@@ -261,11 +267,8 @@ class NetworkViewModel: ObservableObject {
                     newConnectionIds.subtract(newIds)
                 }
             }
-
-            connections = conns
-            lastRefresh = Date()
         } catch {
-            // Silently handle errors
+            isRefreshing = false
         }
     }
 
