@@ -10,6 +10,7 @@ struct ContentView: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(selectedSection: $selectedSection)
                 .environmentObject(viewModel)
+                .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 400)
         } detail: {
             switch selectedSection {
             case .connections:

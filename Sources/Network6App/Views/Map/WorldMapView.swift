@@ -166,30 +166,123 @@ struct WorldMapView: View {
 
     // MARK: - Map controls
     private var mapControls: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
+            // Zoom in
             Button {
-                withAnimation {
-                    cameraPosition = .automatic
-                }
+                zoomIn()
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 32, height: 32)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .help("Zoom in")
+            .keyboardShortcut("+", modifiers: [.command])
+
+            // Zoom out
+            Button {
+                zoomOut()
+            } label: {
+                Image(systemName: "minus")
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 32, height: 32)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .help("Zoom out")
+            .keyboardShortcut("-", modifiers: [.command])
+
+            Divider().frame(width: 20)
+
+            // Fit all
+            Button {
+                fitAll()
             } label: {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    .font(.caption)
-                    .padding(8)
-                    .background(.ultraThinMaterial, in: Circle())
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 32, height: 32)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             .help("Fit all connections")
+            .keyboardShortcut("0", modifiers: [.command])
 
+            // Zoom to user
+            if viewModel.myLocation != nil {
+                Button {
+                    zoomToUser()
+                } label: {
+                    Image(systemName: "location.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(width: 32, height: 32)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .help("Zoom to your location")
+            }
+
+            Divider().frame(width: 20)
+
+            // Toggle stats panel
             Button {
                 showStats.toggle()
             } label: {
                 Image(systemName: showStats ? "sidebar.right" : "sidebar.left")
-                    .font(.caption)
-                    .padding(8)
-                    .background(.ultraThinMaterial, in: Circle())
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 32, height: 32)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
             .help("Toggle stats panel")
+        }
+    }
+
+    // MARK: - Zoom actions
+    @State private var currentSpan: Double = 80 // degrees
+
+    private func zoomIn() {
+        currentSpan = max(1, currentSpan * 0.5)
+        applyZoom()
+    }
+
+    private func zoomOut() {
+        currentSpan = min(160, currentSpan * 2)
+        applyZoom()
+    }
+
+    private func applyZoom() {
+        let center = currentCenter()
+        withAnimation(.easeInOut(duration: 0.3)) {
+            cameraPosition = .region(MKCoordinateRegion(
+                center: center,
+                span: MKCoordinateSpan(latitudeDelta: currentSpan, longitudeDelta: currentSpan)
+            ))
+        }
+    }
+
+    private func currentCenter() -> CLLocationCoordinate2D {
+        if let myLoc = viewModel.myLocation {
+            return CLLocationCoordinate2D(latitude: myLoc.lat, longitude: myLoc.lon)
+        }
+        return CLLocationCoordinate2D(latitude: 30, longitude: 0)
+    }
+
+    private func fitAll() {
+        withAnimation(.easeInOut(duration: 0.5)) {
+            cameraPosition = .automatic
+        }
+        currentSpan = 80
+    }
+
+    private func zoomToUser() {
+        guard let myLoc = viewModel.myLocation else { return }
+        currentSpan = 20
+        withAnimation(.easeInOut(duration: 0.5)) {
+            cameraPosition = .region(MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: myLoc.lat, longitude: myLoc.lon),
+                span: MKCoordinateSpan(latitudeDelta: 20, longitudeDelta: 20)
+            ))
         }
     }
 
