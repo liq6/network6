@@ -87,16 +87,14 @@ struct ConnectionsView: View {
             .width(min: 140, ideal: 200)
 
             TableColumn("Port", value: \.remotePort) { conn in
-                Text(conn.portLabel.map { "\(conn.remotePort)/\($0)" } ?? "\(conn.remotePort)")
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundStyle(conn.portLabel != nil ? .primary : .secondary)
+                HStack(spacing: 4) {
+                    Text(conn.portLabel.map { "\(conn.remotePort)/\($0)" } ?? "\(conn.remotePort)")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(conn.portLabel != nil ? .primary : .secondary)
+                    ProtocolBadge(proto: conn.protocol)
+                }
             }
-            .width(min: 70, ideal: 90)
-
-            TableColumn("Proto", value: \.protocolSortKey) { conn in
-                ProtocolBadge(proto: conn.protocol)
-            }
-            .width(50)
+            .width(min: 90, ideal: 120)
 
             TableColumn("State", value: \.stateSortKey) { conn in
                 StatusBadge(state: conn.state)
@@ -120,13 +118,6 @@ struct ConnectionsView: View {
                     .foregroundStyle(.secondary)
             }
             .width(min: 80, ideal: 130)
-
-            TableColumn("Time", value: \.firstSeen) { conn in
-                Text(conn.duration)
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundStyle(.secondary)
-            }
-            .width(60)
         }
         .contextMenu(forSelectionType: ConnectionInfo.ID.self) { ids in
             if let id = ids.first, let conn = viewModel.filteredConnections.first(where: { $0.id == id }) {
