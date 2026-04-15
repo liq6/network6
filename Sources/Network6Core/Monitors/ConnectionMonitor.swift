@@ -46,32 +46,28 @@ public actor ConnectionMonitor {
     }
 
     private func runLsof() async throws -> String {
-        let process = Process()
-        let pipe = Pipe()
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let process = Process()
+                    let pipe = Pipe()
 
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
-        process.arguments = ["-i", "-n", "-P", "+c", "0"]
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
+                    process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+                    process.arguments = ["-i", "-n", "-P", "+c", "0"]
+                    process.standardOutput = pipe
+                    process.standardError = FileHandle.nullDevice
 
-        try process.run()
+                    try process.run()
 
-        return await withCheckedContinuation { continuation in
-            pipe.fileHandleForReading.readabilityHandler = { handle in
-                let data = handle.availableData
-                if data.isEmpty {
-                    handle.readabilityHandler = nil
-                    let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                    // Re-read all data
+                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                    process.waitUntilExit()
+
+                    let output = String(data: data, encoding: .utf8) ?? ""
                     continuation.resume(returning: output)
+                } catch {
+                    continuation.resume(throwing: error)
                 }
             }
-            // Simpler approach: just wait
-            pipe.fileHandleForReading.readabilityHandler = nil
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            let output = String(data: data, encoding: .utf8) ?? ""
-            continuation.resume(returning: output)
         }
     }
 

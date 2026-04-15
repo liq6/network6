@@ -13,7 +13,7 @@ class NetworkViewModel: ObservableObject {
     @Published var selectedApps: Set<String> = []
     @Published var selectedCountries: Set<String> = []
     @Published var selectedProtocols: Set<ConnectionProtocol> = []
-    @Published var selectedConnection: ConnectionInfo?
+    @Published var selectedConnectionId: ConnectionInfo.ID?
     @Published var showListenPorts = false
     @Published var showAll = false
     @Published var refreshInterval: Double = 2.0

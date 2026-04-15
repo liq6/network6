@@ -3,7 +3,6 @@ import Network6Core
 
 struct ConnectionsView: View {
     @EnvironmentObject var viewModel: NetworkViewModel
-    @State private var sortOrder = [KeyPathComparator(\ConnectionInfo.processName)]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,16 +16,17 @@ struct ConnectionsView: View {
                 connectionTable
                     .frame(minWidth: 600)
 
-                if let selected = viewModel.selectedConnection {
-                    ConnectionDetailView(connection: selected)
-                        .frame(width: 300)
+                if let selectedId = viewModel.selectedConnectionId,
+                   let conn = viewModel.filteredConnections.first(where: { $0.id == selectedId }) {
+                    ConnectionDetailView(connection: conn)
+                        .frame(minWidth: 260, idealWidth: 300, maxWidth: 400)
                 }
             }
         }
     }
 
     private var connectionTable: some View {
-        Table(viewModel.filteredConnections, selection: $viewModel.selectedConnection.id, sortOrder: $sortOrder) {
+        Table(viewModel.filteredConnections, selection: $viewModel.selectedConnectionId) {
             TableColumn("") { conn in
                 Circle()
                     .fill(AppColors.color(for: conn.state))
@@ -34,7 +34,7 @@ struct ConnectionsView: View {
             }
             .width(20)
 
-            TableColumn("Application", value: \.processName) { conn in
+            TableColumn("Application") { conn in
                 HStack(spacing: 6) {
                     Image(systemName: "app.fill")
                         .foregroundStyle(.secondary)
@@ -43,7 +43,6 @@ struct ConnectionsView: View {
                         .lineLimit(1)
                         .fontWeight(.medium)
                 }
-                .opacity(viewModel.newConnectionIds.contains(conn.id) ? 1 : 0.9)
                 .background(
                     viewModel.newConnectionIds.contains(conn.id)
                         ? AppColors.newHighlight : Color.clear
@@ -51,12 +50,12 @@ struct ConnectionsView: View {
             }
             .width(min: 120, ideal: 160)
 
-            TableColumn("Remote", value: \.remoteDisplay) { conn in
+            TableColumn("Remote") { conn in
                 VStack(alignment: .leading, spacing: 1) {
                     Text(conn.remoteDisplay)
                         .lineLimit(1)
                         .font(.system(.body, design: .monospaced))
-                    if conn.hostname != nil && conn.hostname != conn.remoteAddress {
+                    if let hostname = conn.hostname, hostname != conn.remoteAddress {
                         Text(conn.remoteAddress)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -132,21 +131,6 @@ struct ConnectionsView: View {
                 }
             }
         }
-        .onChange(of: sortOrder) { _, newOrder in
-            // Handled by Table built-in sorting
-        }
-    }
-}
-
-// Helper to bind optional selection to Table
-extension Binding where Value == ConnectionInfo? {
-    var id: Binding<ConnectionInfo.ID?> {
-        Binding<ConnectionInfo.ID?>(
-            get: { self.wrappedValue?.id },
-            set: { newID in
-                // Will be set by selection
-            }
-        )
     }
 }
 

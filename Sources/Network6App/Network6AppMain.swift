@@ -5,6 +5,8 @@ struct Network6AppMain: App {
     @StateObject private var viewModel = NetworkViewModel()
 
     init() {
+        // Make the process a regular app (dock icon + window activation)
+        NSApplication.shared.setActivationPolicy(.regular)
         setDockIcon()
     }
 
@@ -13,6 +15,10 @@ struct Network6AppMain: App {
             ContentView()
                 .environmentObject(viewModel)
                 .frame(minWidth: 1100, minHeight: 600)
+                .onAppear {
+                    // Bring window to front
+                    NSApplication.shared.activate(ignoringOtherApps: true)
+                }
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1400, height: 800)
