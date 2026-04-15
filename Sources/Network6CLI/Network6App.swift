@@ -31,6 +31,9 @@ struct Network6App: AsyncParsableCommand {
     @Flag(name: .long, help: "Include LISTEN ports.")
     var listen: Bool = false
 
+    @Flag(name: .shortAndLong, help: "Show all connections (LISTEN, UDP bound, etc.).")
+    var all: Bool = false
+
     enum SortColumn: String, ExpressibleByArgument, CaseIterable {
         case app, remote, port, state, country, pid, distance
     }
@@ -125,10 +128,15 @@ struct Network6App: AsyncParsableCommand {
 
                 if established {
                     connections = connections.filter { $0.state == .established }
-                }
-
-                if !listen {
-                    connections = connections.filter { $0.state != .listen }
+                } else if !all {
+                    // By default, hide LISTEN and UDP-bound (no remote) sockets
+                    if !listen {
+                        connections = connections.filter { $0.state != .listen }
+                    }
+                    connections = connections.filter { conn in
+                        // Keep if it has a remote address, or if it's a LISTEN we chose to keep
+                        !conn.remoteAddress.isEmpty || conn.state == .listen
+                    }
                 }
 
                 // Sort

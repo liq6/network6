@@ -111,8 +111,9 @@ public actor ConnectionMonitor {
             // Parse NAME: "local:port->remote:port (STATE)" or "local:port" (LISTEN) or "*:port"
             let (localAddr, localPort, remoteAddr, remotePort, state) = parseNameField(name)
 
-            // Skip entries with no useful remote address
-            guard !remoteAddr.isEmpty || state == .listen else { continue }
+            // Keep: connections with remote address, LISTEN ports, and UDP bound sockets
+            let isUDP = proto == .udp || proto == .udp6
+            guard !remoteAddr.isEmpty || state == .listen || isUDP else { continue }
 
             let portLabel = PortLabels.label(for: remotePort != 0 ? remotePort : localPort)
 
