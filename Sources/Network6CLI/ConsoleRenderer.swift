@@ -45,7 +45,7 @@ struct ConsoleRenderer {
 
     /// Renders the full frame flicker-free: builds the entire output in memory,
     /// then writes it in a single syscall — just like `top`.
-    mutating func render(connections: [ConnectionInfo], isRoot: Bool) {
+    mutating func render(connections: [ConnectionInfo], isRoot: Bool, myLocation: String? = nil) {
         let (termWidth, termHeight) = getTerminalSize()
         var buf = ""
 
@@ -61,6 +61,10 @@ struct ConsoleRenderer {
         let quit = "\(ANSICode.dim)Ctrl+C to quit\(ANSICode.reset)"
         buf += "\(ANSICode.clearLine)\(title)  │  \(count)  │  \(mode)  │  \(quit)\n"
 
+        if let loc = myLocation {
+            buf += "\(ANSICode.clearLine)\(ANSICode.dim)📍 Your location: \(loc)\(ANSICode.reset)\n"
+        }
+
         let separator = String(repeating: "─", count: min(termWidth, 160))
         buf += "\(ANSICode.clearLine)\(separator)\n"
 
@@ -73,8 +77,9 @@ struct ConsoleRenderer {
             ("LOCAL", 22),
             ("REMOTE", 30),
             ("PORT", 10),
-            ("LOCATION", 24),
-            ("ORG", 18),
+            ("LOCATION", 22),
+            ("DIST", 10),
+            ("ORG", 16),
             ("TIME", 7),
         ]
 
@@ -87,9 +92,9 @@ struct ConsoleRenderer {
         buf += "\(ANSICode.clearLine)\(separator)\n"
 
         // ── Data rows ──
-        let reservedLines = 6 // header(1) + sep(1) + colheader(1) + sep(1) + footer(1) + margin(1)
+        let reservedLines = 7
         let maxRows = max(1, termHeight - reservedLines)
-        var lineCount = 4 // lines written so far (header + 2 seps + col header)
+        var lineCount = myLocation != nil ? 5 : 4
 
         for (index, conn) in connections.prefix(maxRows).enumerated() {
             let stateColor = colorForState(conn.state)
@@ -104,8 +109,9 @@ struct ConsoleRenderer {
             row += pad(conn.remoteDisplay, cols[5].1)
             row += pad(conn.portLabel.map { "\(conn.remotePort)/\($0)" } ?? "\(conn.remotePort)", cols[6].1)
             row += pad(conn.locationDisplay, cols[7].1)
-            row += pad(conn.geoLocation?.org ?? "—", cols[8].1)
-            row += pad(conn.duration, cols[9].1)
+            row += pad(conn.distanceDisplay, cols[8].1)
+            row += pad(conn.geoLocation?.org ?? "—", cols[9].1)
+            row += pad(conn.duration, cols[10].1)
             row += ANSICode.reset
 
             buf += row + "\n"

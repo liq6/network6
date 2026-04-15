@@ -29,6 +29,21 @@ final class ResolverTests: XCTestCase {
         XCTAssertEqual(emptyGeo.summary, "1.2.3.4")
     }
 
+    func testGeoLocationDistance() {
+        // Paris → New York ≈ 5,837 km
+        let paris = GeoLocation(ip: "1.1.1.1", lat: 48.8566, lon: 2.3522)
+        let newYork = GeoLocation(ip: "2.2.2.2", lat: 40.7128, lon: -74.0060)
+        let distance = paris.distance(to: newYork)
+        XCTAssertGreaterThan(distance, 5700)
+        XCTAssertLessThan(distance, 6000)
+
+        // Same location → 0 km
+        XCTAssertEqual(paris.distance(to: paris), 0, accuracy: 0.01)
+
+        // Display string
+        XCTAssertTrue(paris.distanceDisplay(to: newYork).contains("km"))
+    }
+
     func testGeoIPResponseDecoding() throws {
         let json = """
         {

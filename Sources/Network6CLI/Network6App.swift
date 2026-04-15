@@ -16,7 +16,7 @@ struct Network6App: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Filter by application name (substring match).")
     var filter: String?
 
-    @Option(name: .shortAndLong, help: "Sort by column: app, remote, port, state, country, pid.")
+    @Option(name: .shortAndLong, help: "Sort by column: app, remote, port, state, country, pid, distance.")
     var sort: SortColumn = .app
 
     @Flag(name: .long, help: "Skip DNS reverse resolution.")
@@ -32,7 +32,7 @@ struct Network6App: AsyncParsableCommand {
     var listen: Bool = false
 
     enum SortColumn: String, ExpressibleByArgument, CaseIterable {
-        case app, remote, port, state, country, pid
+        case app, remote, port, state, country, pid, distance
     }
 
     func run() async throws {
@@ -56,6 +56,11 @@ struct Network6App: AsyncParsableCommand {
 
         // Enter alternate screen buffer, hide cursor
         renderer.setup()
+
+        // Resolve user's own location once at startup
+        if !noGeo {
+            let _ = await geoResolver.resolveMyLocation()
+        }
 
         while true {
             do {
@@ -99,9 +104,13 @@ struct Network6App: AsyncParsableCommand {
                 if !noGeo {
                     let ips = connections.compactMap { $0.remoteAddress.isEmpty ? nil : $0.remoteAddress }
                     let geos = await geoResolver.resolveAll(ips)
+                    let myLocation = await geoResolver.getMyLocation()
                     for i in connections.indices {
                         if let geo = geos[connections[i].remoteAddress] {
                             connections[i].geoLocation = geo
+                            if let myLoc = myLocation {
+                                connections[i].distanceKm = myLoc.distance(to: geo)
+                            }
                         }
                     }
                 }
@@ -131,10 +140,13 @@ struct Network6App: AsyncParsableCommand {
                     case .state: return a.state.rawValue < b.state.rawValue
                     case .country: return a.locationDisplay < b.locationDisplay
                     case .pid: return a.pid < b.pid
+                    case .distance: return (a.distanceKm ?? .infinity) < (b.distanceKm ?? .infinity)
                     }
                 }
 
-                renderer.render(connections: connections, isRoot: isRoot)
+                let myLoc = await geoResolver.getMyLocation()
+                let myLocDisplay = myLoc?.summary
+                renderer.render(connections: connections, isRoot: isRoot, myLocation: myLocDisplay)
 
             } catch {
                 print("\u{1B}[31mError: \(error.localizedDescription)\u{1B}[0m")

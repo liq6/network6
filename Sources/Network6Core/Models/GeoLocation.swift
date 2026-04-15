@@ -44,6 +44,27 @@ public struct GeoLocation: Sendable {
         if !org.isEmpty { parts.append("(\(org))") }
         return parts.isEmpty ? ip : parts.joined(separator: ", ")
     }
+
+    /// Calculates the distance in kilometers to another GeoLocation using the Haversine formula.
+    public func distance(to other: GeoLocation) -> Double {
+        let R = 6371.0 // Earth radius in km
+        let dLat = (other.lat - lat) * .pi / 180
+        let dLon = (other.lon - lon) * .pi / 180
+        let lat1 = lat * .pi / 180
+        let lat2 = other.lat * .pi / 180
+        let a = sin(dLat / 2) * sin(dLat / 2) +
+                cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2)
+        let c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return R * c
+    }
+
+    /// Human-readable distance string.
+    public func distanceDisplay(to other: GeoLocation) -> String {
+        let km = distance(to: other)
+        if km < 1 { return "<1 km" }
+        if km < 1000 { return "\(Int(km)) km" }
+        return String(format: "%.1fk km", km / 1000)
+    }
 }
 
 /// Decodable model matching ip-api.com JSON response

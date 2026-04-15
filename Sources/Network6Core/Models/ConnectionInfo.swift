@@ -16,6 +16,7 @@ public struct ConnectionInfo: Identifiable, Sendable {
     public let portLabel: String?
     public var hostname: String?
     public var geoLocation: GeoLocation?
+    public var distanceKm: Double?
     public let firstSeen: Date
 
     public init(
@@ -80,6 +81,14 @@ public struct ConnectionInfo: Identifiable, Sendable {
         if !geo.city.isEmpty { parts.append(geo.city) }
         if !geo.country.isEmpty { parts.append(geo.country) }
         return parts.isEmpty ? "—" : parts.joined(separator: ", ")
+    }
+
+    /// Display string for distance to user
+    public var distanceDisplay: String {
+        guard let km = distanceKm else { return "—" }
+        if km < 1 { return "<1 km" }
+        if km < 1000 { return "\(Int(km)) km" }
+        return String(format: "%.1fk km", km / 1000)
     }
 }
 

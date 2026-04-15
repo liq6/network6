@@ -4,11 +4,33 @@ import Foundation
 public actor GeoIPResolver {
     private var cache: [String: GeoLocation] = [:]
     private var failedIPs: Set<String> = []
+    private var myLocation: GeoLocation?
     private var requestCount = 0
     private var windowStart = Date()
     private let maxRequestsPerMinute = 40 // Stay under 45/min limit
 
     public init() {}
+
+    /// Resolves the user's own location by querying ip-api.com with no IP (returns caller's IP).
+    public func resolveMyLocation() async -> GeoLocation? {
+        if let cached = myLocation { return cached }
+        guard canMakeRequest() else { return nil }
+        do {
+            requestCount += 1
+            let url = URL(string: "http://ip-api.com/json/?fields=status,country,countryCode,regionName,city,lat,lon,isp,org,as,query")!
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let response = try JSONDecoder().decode(GeoIPResponse.self, from: data)
+            myLocation = response.toGeoLocation()
+            return myLocation
+        } catch {
+            return nil
+        }
+    }
+
+    /// Returns the previously resolved user location (non-async, for display).
+    public func getMyLocation() -> GeoLocation? {
+        return myLocation
+    }
 
     /// Resolves geo location for a single IP address.
     public func resolve(_ ip: String) async -> GeoLocation? {
