@@ -38,10 +38,19 @@ struct WorldMapView: View {
                 if let myLoc = viewModel.myLocation {
                     let userCoord = CLLocationCoordinate2D(latitude: myLoc.lat, longitude: myLoc.lon)
                     ForEach(viewModel.serverLocations) { server in
-                        MapPolyline(coordinates: [userCoord, server.coordinate])
+                        let isSelected = selectedServer?.id == server.id
+                        let serverColor = AppColors.color(for: server.primaryState)
+                        MapPolyline(coordinates: arcPoints(from: userCoord, to: server.coordinate))
                             .stroke(
-                                lineColor(for: server),
-                                style: StrokeStyle(lineWidth: lineWidth(for: server), dash: [8, 4])
+                                .linearGradient(
+                                    colors: [.blue, serverColor],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                style: StrokeStyle(
+                                    lineWidth: isSelected ? 3.5 : lineWidth(for: server),
+                                    lineCap: .round
+                                )
                             )
                     }
                 }
@@ -267,16 +276,41 @@ struct WorldMapView: View {
     }
 
     // MARK: - Helpers
-    private func lineColor(for server: ServerLocation) -> Color {
-        if selectedServer?.id == server.id {
-            return .accentColor
+
+    /// Generate curved arc points between two coordinates (great-circle-like curve)
+    private func arcPoints(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D, segments: Int = 30) -> [CLLocationCoordinate2D] {
+        var points: [CLLocationCoordinate2D] = []
+        let midLat = (start.latitude + end.latitude) / 2
+        let midLon = (start.longitude + end.longitude) / 2
+
+        // Offset perpendicular to the line for the curve bulge
+        let dLat = end.latitude - start.latitude
+        let dLon = end.longitude - start.longitude
+        let distance = sqrt(dLat * dLat + dLon * dLon)
+        let bulge = distance * 0.15 // 15% of distance as curve height
+
+        // Perpendicular offset (rotated 90°)
+        let perpLat = -dLon / distance * bulge
+        let perpLon = dLat / distance * bulge
+
+        let controlLat = midLat + perpLat
+        let controlLon = midLon + perpLon
+
+        for i in 0...segments {
+            let t = Double(i) / Double(segments)
+            let u = 1.0 - t
+            // Quadratic Bézier: B(t) = (1-t)²·P0 + 2(1-t)t·P1 + t²·P2
+            let lat = u * u * start.latitude + 2 * u * t * controlLat + t * t * end.latitude
+            let lon = u * u * start.longitude + 2 * u * t * controlLon + t * t * end.longitude
+            points.append(CLLocationCoordinate2D(latitude: lat, longitude: lon))
         }
-        return AppColors.color(for: server.primaryState).opacity(0.4)
+        return points
     }
 
     private func lineWidth(for server: ServerLocation) -> CGFloat {
-        if selectedServer?.id == server.id { return 2.5 }
-        return min(CGFloat(server.connectionCount), 4) * 0.5 + 0.5
+        let base: CGFloat = 1.5
+        let extra = min(CGFloat(server.connectionCount - 1), 4) * 0.5
+        return base + extra
     }
 }
 
