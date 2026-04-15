@@ -61,7 +61,8 @@ struct WorldMapView: View {
                         mapStatsPanel
                     }
                 }
-                .padding([.top, .horizontal])
+                .padding(.top, 4)
+                .padding(.horizontal)
 
                 // Info widget below stats (right-aligned)
                 HStack(alignment: .top) {
@@ -139,7 +140,7 @@ struct WorldMapView: View {
             }
         }
         .padding(12)
-        .frame(width: 200)
+        .frame(width: 280)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
