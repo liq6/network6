@@ -40,19 +40,22 @@ struct Network6App: AsyncParsableCommand {
         let dnsResolver = DNSResolver()
         let geoResolver = GeoIPResolver()
         let processResolver = ProcessResolver()
-        let renderer = ConsoleRenderer()
+        var renderer = ConsoleRenderer()
         let isRoot = getuid() == 0
 
         // Setup signal handler for clean exit
         signal(SIGINT) { _ in
-            // Show cursor, reset terminal
-            print("\u{1B}[?25h\u{1B}[0m")
+            ConsoleRenderer.teardown()
             print("\nNetwork6 stopped.")
             Darwin.exit(0)
         }
+        signal(SIGTERM) { _ in
+            ConsoleRenderer.teardown()
+            Darwin.exit(0)
+        }
 
-        // Hide cursor
-        print("\u{1B}[?25l", terminator: "")
+        // Enter alternate screen buffer, hide cursor
+        renderer.setup()
 
         while true {
             do {
