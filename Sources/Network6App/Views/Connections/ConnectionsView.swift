@@ -3,6 +3,7 @@ import Network6Core
 
 struct ConnectionsView: View {
     @EnvironmentObject var viewModel: NetworkViewModel
+    @State private var showDetail = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -15,8 +16,24 @@ struct ConnectionsView: View {
             HSplitView {
                 connectionTable
                     .frame(minWidth: 600)
+                    .overlay(alignment: .topTrailing) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showDetail.toggle()
+                            }
+                        } label: {
+                            Image(systemName: showDetail ? "sidebar.trailing" : "sidebar.leading")
+                                .font(.system(size: 12, weight: .medium))
+                                .frame(width: 28, height: 28)
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                        .help(showDetail ? "Hide details" : "Show details")
+                        .padding(8)
+                    }
 
-                if let selectedId = viewModel.selectedConnectionId,
+                if showDetail,
+                   let selectedId = viewModel.selectedConnectionId,
                    let conn = viewModel.filteredConnections.first(where: { $0.id == selectedId }) {
                     ConnectionDetailView(connection: conn)
                         .frame(minWidth: 260, idealWidth: 300, maxWidth: 400)
