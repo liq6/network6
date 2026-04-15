@@ -47,22 +47,24 @@ final class ResolverTests: XCTestCase {
     func testGeoIPResponseDecoding() throws {
         let json = """
         {
-            "status": "success",
+            "ip": "8.8.8.8",
+            "success": true,
             "country": "United States",
-            "countryCode": "US",
-            "regionName": "California",
+            "country_code": "US",
+            "region": "California",
             "city": "Mountain View",
-            "lat": 37.4056,
-            "lon": -122.0775,
-            "isp": "Google LLC",
-            "org": "Google Public DNS",
-            "as": "AS15169 Google LLC",
-            "query": "8.8.8.8"
+            "latitude": 37.4056,
+            "longitude": -122.0775,
+            "connection": {
+                "asn": 15169,
+                "org": "Google Public DNS",
+                "isp": "Google LLC"
+            }
         }
         """.data(using: .utf8)!
 
-        let response = try JSONDecoder().decode(GeoIPResponse.self, from: json)
-        XCTAssertEqual(response.status, "success")
+        let response = try JSONDecoder().decode(IpwhoisResponse.self, from: json)
+        XCTAssertTrue(response.success)
         XCTAssertEqual(response.country, "United States")
 
         let geo = response.toGeoLocation()
@@ -74,10 +76,10 @@ final class ResolverTests: XCTestCase {
 
     func testGeoIPResponseFailure() throws {
         let json = """
-        {"status": "fail", "country": null, "countryCode": null, "regionName": null, "city": null, "lat": 0, "lon": 0, "isp": null, "org": null, "as": null, "query": "10.0.0.1"}
+        {"ip": "10.0.0.1", "success": false}
         """.data(using: .utf8)!
 
-        let response = try JSONDecoder().decode(GeoIPResponse.self, from: json)
+        let response = try JSONDecoder().decode(IpwhoisResponse.self, from: json)
         XCTAssertNil(response.toGeoLocation())
     }
 

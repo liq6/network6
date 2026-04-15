@@ -1,25 +1,20 @@
 import Foundation
 
-/// Resolves geographic location for IP addresses using ip-api.com with caching and rate limiting.
+/// Resolves geographic location for IP addresses using ipwho.is (HTTPS, fast, free).
 public actor GeoIPResolver {
     private var cache: [String: GeoLocation] = [:]
     private var failedIPs: Set<String> = []
     private var myLocation: GeoLocation?
-    private var requestCount = 0
-    private var windowStart = Date()
-    private let maxRequestsPerMinute = 40 // Stay under 45/min limit
 
     public init() {}
 
-    /// Resolves the user's own location by querying ip-api.com with no IP (returns caller's IP).
+    /// Resolves the user's own location by querying ipwho.is with no IP.
     public func resolveMyLocation() async -> GeoLocation? {
         if let cached = myLocation { return cached }
-        guard canMakeRequest() else { return nil }
         do {
-            requestCount += 1
-            let url = URL(string: "http://ip-api.com/json/?fields=status,country,countryCode,regionName,city,lat,lon,isp,org,as,query")!
+            let url = URL(string: "https://ipwho.is/")!
             let (data, _) = try await URLSession.shared.data(from: url)
-            let response = try JSONDecoder().decode(GeoIPResponse.self, from: data)
+            let response = try JSONDecoder().decode(IpwhoisResponse.self, from: data)
             myLocation = response.toGeoLocation()
             return myLocation
         } catch {
@@ -38,8 +33,6 @@ public actor GeoIPResolver {
         if failedIPs.contains(ip) { return nil }
         if isPrivateAddress(ip) { return nil }
 
-        guard canMakeRequest() else { return nil }
-
         do {
             let geo = try await fetchGeoIP(ip)
             if let geo = geo {
@@ -53,24 +46,33 @@ public actor GeoIPResolver {
         }
     }
 
-    /// Batch resolve multiple IPs. Respects rate limiting.
+    /// Batch resolve multiple IPs using concurrent requests.
     public func resolveAll(_ ips: [String]) async -> [String: GeoLocation] {
         var results: [String: GeoLocation] = [:]
 
-        // Filter to unique, non-cached, non-private IPs
         let toResolve = Set(ips).filter { ip in
             cache[ip] == nil && !failedIPs.contains(ip) && !isPrivateAddress(ip)
         }
 
-        // Use batch API for efficiency
+        // Concurrent requests (ipwho.is has no strict rate limit)
         if !toResolve.isEmpty {
-            let batchResults = await fetchBatchGeoIP(Array(toResolve.prefix(maxAvailableRequests())))
-            for (ip, geo) in batchResults {
-                cache[ip] = geo
+            await withTaskGroup(of: (String, GeoLocation?).self) { group in
+                for ip in toResolve.prefix(50) {
+                    group.addTask { [self] in
+                        let geo = try? await self.fetchGeoIP(ip)
+                        return (ip, geo)
+                    }
+                }
+                for await (ip, geo) in group {
+                    if let geo = geo {
+                        cache[ip] = geo
+                    } else {
+                        failedIPs.insert(ip)
+                    }
+                }
             }
         }
 
-        // Return all cached results for requested IPs
         for ip in ips {
             if let geo = cache[ip] {
                 results[ip] = geo
@@ -79,66 +81,11 @@ public actor GeoIPResolver {
         return results
     }
 
-    private func canMakeRequest() -> Bool {
-        let now = Date()
-        if now.timeIntervalSince(windowStart) > 60 {
-            requestCount = 0
-            windowStart = now
-        }
-        return requestCount < maxRequestsPerMinute
-    }
-
-    private func maxAvailableRequests() -> Int {
-        let now = Date()
-        if now.timeIntervalSince(windowStart) > 60 {
-            return maxRequestsPerMinute
-        }
-        return max(0, maxRequestsPerMinute - requestCount)
-    }
-
     private func fetchGeoIP(_ ip: String) async throws -> GeoLocation? {
-        requestCount += 1
-        let url = URL(string: "http://ip-api.com/json/\(ip)?fields=status,country,countryCode,regionName,city,lat,lon,isp,org,as,query")!
+        let url = URL(string: "https://ipwho.is/\(ip)")!
         let (data, _) = try await URLSession.shared.data(from: url)
-        let response = try JSONDecoder().decode(GeoIPResponse.self, from: data)
+        let response = try JSONDecoder().decode(IpwhoisResponse.self, from: data)
         return response.toGeoLocation()
-    }
-
-    private func fetchBatchGeoIP(_ ips: [String]) async -> [String: GeoLocation] {
-        var results: [String: GeoLocation] = [:]
-
-        // ip-api.com batch endpoint accepts up to 100 IPs
-        let batchSize = min(ips.count, 100)
-        let batch = Array(ips.prefix(batchSize))
-
-        do {
-            requestCount += 1
-            let url = URL(string: "http://ip-api.com/batch?fields=status,country,countryCode,regionName,city,lat,lon,isp,org,as,query")!
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-            let body = batch.map { ["query": $0] }
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-            let (data, _) = try await URLSession.shared.data(for: request)
-            let responses = try JSONDecoder().decode([GeoIPResponse].self, from: data)
-
-            for response in responses {
-                if let geo = response.toGeoLocation() {
-                    results[geo.ip] = geo
-                }
-            }
-        } catch {
-            // Fall back to individual requests
-            for ip in batch {
-                if let geo = try? await fetchGeoIP(ip) {
-                    results[ip] = geo
-                }
-            }
-        }
-
-        return results
     }
 
     private func isPrivateAddress(_ ip: String) -> Bool {

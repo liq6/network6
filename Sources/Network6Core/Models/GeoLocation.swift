@@ -67,33 +67,37 @@ public struct GeoLocation: Sendable {
     }
 }
 
-/// Decodable model matching ip-api.com JSON response
-struct GeoIPResponse: Decodable {
-    let status: String
+/// Decodable model matching ipwho.is JSON response
+struct IpwhoisResponse: Decodable {
+    let ip: String?
+    let success: Bool
     let country: String?
-    let countryCode: String?
-    let regionName: String?
+    let country_code: String?
+    let region: String?
     let city: String?
-    let lat: Double?
-    let lon: Double?
-    let isp: String?
-    let org: String?
-    let `as`: String?
-    let query: String?
+    let latitude: Double?
+    let longitude: Double?
+    let connection: IpwhoisConnection?
+
+    struct IpwhoisConnection: Decodable {
+        let asn: Int?
+        let org: String?
+        let isp: String?
+    }
 
     func toGeoLocation() -> GeoLocation? {
-        guard status == "success", let ip = query else { return nil }
+        guard success, let ip = ip else { return nil }
         return GeoLocation(
             ip: ip,
             country: country ?? "",
-            countryCode: countryCode ?? "",
-            region: regionName ?? "",
+            countryCode: country_code ?? "",
+            region: region ?? "",
             city: city ?? "",
-            lat: lat ?? 0,
-            lon: lon ?? 0,
-            isp: isp ?? "",
-            org: org ?? "",
-            asNumber: `as` ?? ""
+            lat: latitude ?? 0,
+            lon: longitude ?? 0,
+            isp: connection?.isp ?? "",
+            org: connection?.org ?? "",
+            asNumber: connection?.asn.map { "AS\($0)" } ?? ""
         )
     }
 }
