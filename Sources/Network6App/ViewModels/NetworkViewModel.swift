@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import Combine
 import Network6Core
 
 @MainActor
@@ -26,12 +27,37 @@ class NetworkViewModel: ObservableObject {
     private let geoResolver = GeoIPResolver()
     private let processResolver = ProcessResolver()
     private var monitoringTask: Task<Void, Never>?
+    private var filterCancellables = Set<AnyCancellable>()
 
-    // MARK: - Computed: filtered & sorted connections
-    var filteredConnections: [ConnectionInfo] {
+    nonisolated init() {
+        // Subscribe to filter property changes to refresh the cached list.
+        // Uses MainActor.assumeIsolated since init runs on main but isn't
+        // statically provable. Debounce searchText to avoid per-keystroke churn.
+        MainActor.assumeIsolated {
+            $searchText
+                .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
+                .sink { [weak self] _ in self?.updateFilteredConnections() }
+                .store(in: &filterCancellables)
+
+            $showAll
+                .dropFirst()
+                .sink { [weak self] _ in self?.updateFilteredConnections() }
+                .store(in: &filterCancellables)
+
+            $showListenPorts
+                .dropFirst()
+                .sink { [weak self] _ in self?.updateFilteredConnections() }
+                .store(in: &filterCancellables)
+        }
+    }
+
+    // MARK: - Cached filtered data (avoids reentrant NSTableView delegate)
+    @Published var filteredConnections: [ConnectionInfo] = []
+
+    /// Recompute filtered list — call after any filter or data change
+    private func updateFilteredConnections() {
         var result = connections
 
-        // State filters
         if !showAll {
             if !showListenPorts {
                 result = result.filter { $0.state != .listen }
@@ -77,7 +103,7 @@ class NetworkViewModel: ObservableObject {
             }
         }
 
-        return result.sorted { $0.processName.lowercased() < $1.processName.lowercased() }
+        filteredConnections = result.sorted { $0.processName.lowercased() < $1.processName.lowercased() }
     }
 
     // MARK: - Computed: sidebar data
@@ -243,12 +269,9 @@ class NetworkViewModel: ObservableObject {
                 }
             }
 
-            let finalConns = conns
-            // Defer state update to next run loop to avoid reentrant NSTableView delegate
-            RunLoop.main.perform {
-                self.connections = finalConns
-                self.lastRefresh = Date()
-            }
+            connections = conns
+            lastRefresh = Date()
+            updateFilteredConnections()
         } catch {
             // Silently handle errors
         }
@@ -261,6 +284,7 @@ class NetworkViewModel: ObservableObject {
         } else {
             selectedOrgs.insert(org)
         }
+        updateFilteredConnections()
     }
 
     func toggleCountryFilter(_ code: String) {
@@ -269,6 +293,7 @@ class NetworkViewModel: ObservableObject {
         } else {
             selectedCountries.insert(code)
         }
+        updateFilteredConnections()
     }
 
     func toggleStateFilter(_ state: ConnectionState) {
@@ -277,6 +302,7 @@ class NetworkViewModel: ObservableObject {
         } else {
             selectedStates.insert(state)
         }
+        updateFilteredConnections()
     }
 
     func clearFilters() {
@@ -285,6 +311,7 @@ class NetworkViewModel: ObservableObject {
         selectedOrgs.removeAll()
         selectedCountries.removeAll()
         selectedProtocols.removeAll()
+        updateFilteredConnections()
     }
 
     // MARK: - Export
