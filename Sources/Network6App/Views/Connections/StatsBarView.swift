@@ -6,17 +6,11 @@ struct StatsBarView: View {
 
     var body: some View {
         HStack(spacing: 20) {
-            // Refresh indicator
+            // Live indicator
             HStack(spacing: 6) {
-                if viewModel.isRefreshing {
-                    ProgressView()
-                        .controlSize(.small)
-                        .scaleEffect(0.7)
-                } else {
-                    Circle()
-                        .fill(.green)
-                        .frame(width: 6, height: 6)
-                }
+                Circle()
+                    .fill(.green)
+                    .frame(width: 6, height: 6)
                 Text("Live")
                     .font(.caption)
                     .foregroundStyle(.secondary)

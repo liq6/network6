@@ -9,7 +9,6 @@ class NetworkViewModel: ObservableObject {
     @Published var myLocation: GeoLocation?
     @Published var isLoading = true
     @Published var loadingStatus = "Starting…"
-    @Published var isRefreshing = false
     @Published var searchText = ""
     @Published var selectedStates: Set<ConnectionState> = []
     @Published var selectedOrgs: Set<String> = []
@@ -20,7 +19,6 @@ class NetworkViewModel: ObservableObject {
     @Published var showAll = false
     @Published var refreshInterval: Double = 2.0
     @Published var lastRefresh = Date()
-    @Published var newConnectionIds: Set<String> = []
 
     // MARK: - Core services
     private let monitor = ConnectionMonitor()
@@ -198,11 +196,8 @@ class NetworkViewModel: ObservableObject {
     }
 
     func refresh() async {
-        isRefreshing = true
-
         do {
             var conns = try await monitor.refresh()
-            let previousIds = Set(connections.map(\.id))
 
             // Enrich with process paths
             for i in conns.indices {
@@ -248,27 +243,14 @@ class NetworkViewModel: ObservableObject {
                 }
             }
 
-            // Compute new IDs before publishing
-            let currentIds = Set(conns.map(\.id))
-            let newIds = currentIds.subtracting(previousIds)
-
-            // Batch all @Published updates into a single change notification
-            // to avoid reentrant NSTableView delegate calls
-            objectWillChange.send()
-            _connections = Published(wrappedValue: conns)
-            _newConnectionIds = Published(wrappedValue: newIds)
-            _lastRefresh = Published(wrappedValue: Date())
-            _isRefreshing = Published(wrappedValue: false)
-
-            // Clear "new" highlight after delay
-            if !newIds.isEmpty {
-                Task {
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
-                    newConnectionIds.subtract(newIds)
-                }
+            let finalConns = conns
+            // Defer state update to next run loop to avoid reentrant NSTableView delegate
+            RunLoop.main.perform {
+                self.connections = finalConns
+                self.lastRefresh = Date()
             }
         } catch {
-            isRefreshing = false
+            // Silently handle errors
         }
     }
 

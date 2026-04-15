@@ -65,10 +65,6 @@ struct ConnectionsView: View {
                         .lineLimit(1)
                         .fontWeight(.medium)
                 }
-                .background(
-                    viewModel.newConnectionIds.contains(conn.id)
-                        ? AppColors.newHighlight : Color.clear
-                )
             }
             .width(min: 120, ideal: 160)
 

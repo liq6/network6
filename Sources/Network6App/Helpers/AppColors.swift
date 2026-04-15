@@ -24,7 +24,6 @@ enum AppColors {
     static let userPin = Color.blue
     static let serverPin = Color.red
     static let connectionLine = Color.cyan.opacity(0.6)
-    static let newHighlight = Color.yellow.opacity(0.3)
 }
 
 /// Converts a 2-letter ISO country code to its emoji flag.
