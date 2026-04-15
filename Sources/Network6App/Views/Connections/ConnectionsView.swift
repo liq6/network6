@@ -4,6 +4,11 @@ import Network6Core
 struct ConnectionsView: View {
     @EnvironmentObject var viewModel: NetworkViewModel
     @State private var showDetail = true
+    @State private var sortOrder = [KeyPathComparator(\ConnectionInfo.processName)]
+
+    private var sortedConnections: [ConnectionInfo] {
+        viewModel.filteredConnections.sorted(using: sortOrder)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,7 +48,7 @@ struct ConnectionsView: View {
     }
 
     private var connectionTable: some View {
-        Table(viewModel.filteredConnections, selection: $viewModel.selectedConnectionId) {
+        Table(sortedConnections, selection: $viewModel.selectedConnectionId, sortOrder: $sortOrder) {
             TableColumn("") { conn in
                 Circle()
                     .fill(AppColors.color(for: conn.state))
@@ -51,7 +56,7 @@ struct ConnectionsView: View {
             }
             .width(20)
 
-            TableColumn("Application") { conn in
+            TableColumn("Application", value: \.processName) { conn in
                 HStack(spacing: 6) {
                     Image(systemName: "app.fill")
                         .foregroundStyle(.secondary)
@@ -67,7 +72,7 @@ struct ConnectionsView: View {
             }
             .width(min: 120, ideal: 160)
 
-            TableColumn("Remote") { conn in
+            TableColumn("Remote", value: \.remoteDisplay) { conn in
                 VStack(alignment: .leading, spacing: 1) {
                     Text(conn.remoteDisplay)
                         .lineLimit(1)
@@ -81,42 +86,42 @@ struct ConnectionsView: View {
             }
             .width(min: 140, ideal: 200)
 
-            TableColumn("Port") { conn in
+            TableColumn("Port", value: \.remotePort) { conn in
                 Text(conn.portLabel.map { "\(conn.remotePort)/\($0)" } ?? "\(conn.remotePort)")
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(conn.portLabel != nil ? .primary : .secondary)
             }
             .width(min: 70, ideal: 90)
 
-            TableColumn("Proto") { conn in
+            TableColumn("Proto", value: \.protocolSortKey) { conn in
                 ProtocolBadge(proto: conn.protocol)
             }
             .width(50)
 
-            TableColumn("State") { conn in
+            TableColumn("State", value: \.stateSortKey) { conn in
                 StatusBadge(state: conn.state)
             }
             .width(min: 80, ideal: 100)
 
-            TableColumn("Location") { conn in
+            TableColumn("Location", value: \.locationSortKey) { conn in
                 CountryLabel(geo: conn.geoLocation)
             }
             .width(min: 100, ideal: 150)
 
-            TableColumn("Distance") { conn in
+            TableColumn("Distance", value: \.distanceSortKey) { conn in
                 Text(conn.distanceDisplay)
                     .foregroundStyle(.secondary)
             }
             .width(min: 60, ideal: 80)
 
-            TableColumn("Org") { conn in
+            TableColumn("Org", value: \.orgSortKey) { conn in
                 Text(conn.geoLocation?.org ?? "—")
                     .lineLimit(1)
                     .foregroundStyle(.secondary)
             }
             .width(min: 80, ideal: 130)
 
-            TableColumn("Time") { conn in
+            TableColumn("Time", value: \.firstSeen) { conn in
                 Text(conn.duration)
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(.secondary)

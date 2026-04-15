@@ -90,6 +90,30 @@ public struct ConnectionInfo: Identifiable, Sendable {
         if km < 1000 { return "\(Int(km)) km" }
         return String(format: "%.1fk km", km / 1000)
     }
+    /// Sort key for location (country + city)
+    public var locationSortKey: String {
+        geoLocation.map { "\($0.country) \($0.city)" } ?? "zzz"
+    }
+
+    /// Sort key for distance
+    public var distanceSortKey: Double {
+        distanceKm ?? Double.greatestFiniteMagnitude
+    }
+
+    /// Sort key for org
+    public var orgSortKey: String {
+        geoLocation?.org ?? "zzz"
+    }
+
+    /// Sort key for protocol
+    public var protocolSortKey: String {
+        `protocol`.rawValue
+    }
+
+    /// Sort key for state
+    public var stateSortKey: String {
+        state.rawValue
+    }
 }
 
 public enum ConnectionProtocol: String, Sendable {
