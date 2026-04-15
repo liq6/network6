@@ -7,6 +7,8 @@ class NetworkViewModel: ObservableObject {
     // MARK: - Published state
     @Published var connections: [ConnectionInfo] = []
     @Published var myLocation: GeoLocation?
+    @Published var isLoading = true
+    @Published var loadingStatus = "Starting…"
     @Published var isRefreshing = false
     @Published var searchText = ""
     @Published var selectedStates: Set<ConnectionState> = []
@@ -146,13 +148,18 @@ class NetworkViewModel: ObservableObject {
 
     // MARK: - Actions
     func startMonitoring() async {
-        // Resolve own location first
+        isLoading = true
+        loadingStatus = "Locating you…"
         myLocation = await geoResolver.resolveMyLocation()
+
+        loadingStatus = "Scanning connections…"
+        await refresh()
+        isLoading = false
 
         monitoringTask = Task {
             while !Task.isCancelled {
-                await refresh()
                 try? await Task.sleep(nanoseconds: UInt64(refreshInterval * 1_000_000_000))
+                await refresh()
             }
         }
     }

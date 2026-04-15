@@ -7,24 +7,54 @@ struct ContentView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(selectedSection: $selectedSection)
-                .environmentObject(viewModel)
-                .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 400)
-        } detail: {
-            switch selectedSection {
-            case .connections:
-                ConnectionsView()
+        ZStack {
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                SidebarView(selectedSection: $selectedSection)
                     .environmentObject(viewModel)
-            case .map:
-                WorldMapView()
-                    .environmentObject(viewModel)
+                    .navigationSplitViewColumnWidth(min: 180, ideal: 240, max: 400)
+            } detail: {
+                switch selectedSection {
+                case .connections:
+                    ConnectionsView()
+                        .environmentObject(viewModel)
+                case .map:
+                    WorldMapView()
+                        .environmentObject(viewModel)
+                }
+            }
+            .navigationSplitViewStyle(.balanced)
+            .task {
+                await viewModel.startMonitoring()
+            }
+
+            // Loading overlay
+            if viewModel.isLoading {
+                ZStack {
+                    Color(.windowBackgroundColor)
+                        .ignoresSafeArea()
+
+                    VStack(spacing: 20) {
+                        Image(systemName: "globe.desk")
+                            .font(.system(size: 48))
+                            .foregroundStyle(.secondary)
+                            .symbolEffect(.pulse, isActive: true)
+
+                        Text("Network6")
+                            .font(.title)
+                            .fontWeight(.semibold)
+
+                        ProgressView()
+                            .controlSize(.large)
+
+                        Text(viewModel.loadingStatus)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .transition(.opacity)
             }
         }
-        .navigationSplitViewStyle(.balanced)
-        .task {
-            await viewModel.startMonitoring()
-        }
+        .animation(.easeInOut(duration: 0.4), value: viewModel.isLoading)
     }
 }
 
