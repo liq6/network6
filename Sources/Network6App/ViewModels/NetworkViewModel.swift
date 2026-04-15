@@ -12,7 +12,7 @@ class NetworkViewModel: ObservableObject {
     @Published var isRefreshing = false
     @Published var searchText = ""
     @Published var selectedStates: Set<ConnectionState> = []
-    @Published var selectedApps: Set<String> = []
+    @Published var selectedOrgs: Set<String> = []
     @Published var selectedCountries: Set<String> = []
     @Published var selectedProtocols: Set<ConnectionProtocol> = []
     @Published var selectedConnectionId: ConnectionInfo.ID?
@@ -47,8 +47,11 @@ class NetworkViewModel: ObservableObject {
             result = result.filter { selectedStates.contains($0.state) }
         }
 
-        if !selectedApps.isEmpty {
-            result = result.filter { selectedApps.contains($0.processName) }
+        if !selectedOrgs.isEmpty {
+            result = result.filter { conn in
+                guard let org = conn.geoLocation?.org, !org.isEmpty else { return false }
+                return selectedOrgs.contains(org)
+            }
         }
 
         if !selectedCountries.isEmpty {
@@ -80,8 +83,12 @@ class NetworkViewModel: ObservableObject {
     }
 
     // MARK: - Computed: sidebar data
-    var uniqueApps: [(name: String, count: Int)] {
-        let grouped = Dictionary(grouping: connections) { $0.processName }
+    var uniqueOrgs: [(name: String, count: Int)] {
+        let withOrg = connections.compactMap { conn -> String? in
+            guard let org = conn.geoLocation?.org, !org.isEmpty else { return nil }
+            return org
+        }
+        let grouped = Dictionary(grouping: withOrg) { $0 }
         return grouped.map { (name: $0.key, count: $0.value.count) }
             .sorted { $0.count > $1.count }
     }
@@ -122,7 +129,7 @@ class NetworkViewModel: ObservableObject {
     }
 
     var hasActiveFilters: Bool {
-        !searchText.isEmpty || !selectedStates.isEmpty || !selectedApps.isEmpty ||
+        !searchText.isEmpty || !selectedStates.isEmpty || !selectedOrgs.isEmpty ||
         !selectedCountries.isEmpty || !selectedProtocols.isEmpty
     }
 
@@ -263,11 +270,11 @@ class NetworkViewModel: ObservableObject {
     }
 
     // MARK: - Filter toggles
-    func toggleAppFilter(_ app: String) {
-        if selectedApps.contains(app) {
-            selectedApps.remove(app)
+    func toggleOrgFilter(_ org: String) {
+        if selectedOrgs.contains(org) {
+            selectedOrgs.remove(org)
         } else {
-            selectedApps.insert(app)
+            selectedOrgs.insert(org)
         }
     }
 
@@ -290,7 +297,7 @@ class NetworkViewModel: ObservableObject {
     func clearFilters() {
         searchText = ""
         selectedStates.removeAll()
-        selectedApps.removeAll()
+        selectedOrgs.removeAll()
         selectedCountries.removeAll()
         selectedProtocols.removeAll()
     }

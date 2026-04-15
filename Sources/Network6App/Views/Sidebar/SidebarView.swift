@@ -14,19 +14,19 @@ struct SidebarView: View {
                 }
             }
 
-            Section("Applications") {
-                ForEach(viewModel.uniqueApps, id: \.name) { app in
+            Section("Organizations") {
+                ForEach(viewModel.uniqueOrgs, id: \.name) { org in
                     Button {
-                        viewModel.toggleAppFilter(app.name)
+                        viewModel.toggleOrgFilter(org.name)
                     } label: {
                         HStack {
-                            Image(systemName: viewModel.selectedApps.contains(app.name) ? "checkmark.circle.fill" : "app")
-                                .foregroundStyle(viewModel.selectedApps.contains(app.name) ? .blue : .secondary)
+                            Image(systemName: viewModel.selectedOrgs.contains(org.name) ? "checkmark.circle.fill" : "building.2")
+                                .foregroundStyle(viewModel.selectedOrgs.contains(org.name) ? .blue : .secondary)
                                 .frame(width: 20)
-                            Text(app.name)
+                            Text(org.name)
                                 .lineLimit(1)
                             Spacer()
-                            Text("\(app.count)")
+                            Text("\(org.count)")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 6)
