@@ -52,20 +52,29 @@ struct WorldMapView: View {
                 MapZoomStepper()
             }
 
-            // Overlay: stats panel
+            // Overlay panels
             VStack {
-                HStack {
+                HStack(alignment: .top) {
+                    // Selected server detail widget (left)
+                    if let server = selectedServer {
+                        ServerInfoWidget(server: server, myLocation: viewModel.myLocation) {
+                            withAnimation(.easeOut(duration: 0.2)) { selectedServer = nil }
+                        }
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                    }
+
                     Spacer()
+
+                    // Stats panel (right)
                     if showStats {
                         mapStatsPanel
                     }
                 }
+
                 Spacer()
-                // Bottom bar: selected server info + controls
+
+                // Bottom controls
                 HStack {
-                    if let server = selectedServer {
-                        selectedServerBar(server)
-                    }
                     Spacer()
                     mapControls
                 }
@@ -127,41 +136,6 @@ struct WorldMapView: View {
         .padding(12)
         .frame(width: 200)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    // MARK: - Selected server info bar
-    private func selectedServerBar(_ server: ServerLocation) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(server.geo.city.isEmpty ? server.geo.country : "\(server.geo.city), \(server.geo.country)")
-                    .fontWeight(.semibold)
-                Text(server.geo.org)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Divider().frame(height: 30)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(server.connectionCount) connection\(server.connectionCount > 1 ? "s" : "")")
-                    .font(.caption)
-                let apps = Set(server.connections.map(\.processName))
-                Text(apps.joined(separator: ", "))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            if let myLoc = viewModel.myLocation {
-                Divider().frame(height: 30)
-                let dist = server.geo.distance(to: myLoc)
-                Text(dist < 1000 ? "\(Int(dist)) km" : String(format: "%.1fk km", dist / 1000))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: - Map controls
@@ -360,3 +334,272 @@ extension ServerLocation: Hashable {
         hasher.combine(id)
     }
 }
+
+// MARK: - Server Info Widget
+
+struct ServerInfoWidget: View {
+    let server: ServerLocation
+    let myLocation: GeoLocation?
+    let onClose: () -> Void
+
+    private var apps: [(name: String, ports: String, count: Int)] {
+        let grouped = Dictionary(grouping: server.connections, by: \.processName)
+        return grouped.map { (name, conns) in
+            let ports = Set(conns.map(\.remotePort)).sorted().prefix(5)
+            let portStr = ports.map(String.init).joined(separator: ", ")
+                + (conns.map(\.remotePort).count > 5 ? "…" : "")
+            return (name: name, ports: portStr, count: conns.count)
+        }
+        .sorted { $0.count > $1.count }
+    }
+
+    private var stateCounts: [(state: ConnectionState, count: Int)] {
+        let grouped = Dictionary(grouping: server.connections, by: \.state)
+        return grouped.map { ($0.key, $0.value.count) }
+            .sorted { $0.count > $1.count }
+    }
+
+    private var protocolCounts: [(proto: String, count: Int)] {
+        let grouped = Dictionary(grouping: server.connections, by: { $0.protocol.shortName })
+        return grouped.map { ($0.key, $0.value.count) }
+            .sorted { $0.count > $1.count }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            header
+            Divider().padding(.horizontal, 12)
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 12) {
+                    locationSection
+                    Divider()
+                    networkSection
+                    Divider()
+                    connectionsSection
+                    Divider()
+                    appsSection
+                }
+                .padding(12)
+            }
+        }
+        .frame(width: 280)
+        .frame(maxHeight: 460)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(countryFlag(server.geo.countryCode))
+                        .font(.title2)
+                    Text(server.geo.city.isEmpty ? server.geo.country : server.geo.city)
+                        .font(.headline)
+                }
+                if !server.geo.city.isEmpty {
+                    Text("\(server.geo.region.isEmpty ? "" : "\(server.geo.region), ")\(server.geo.country)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(12)
+    }
+
+    // MARK: - Location
+
+    private var locationSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle("Location", icon: "mappin.and.ellipse")
+
+            InfoRow(label: "Coordinates",
+                    value: String(format: "%.4f, %.4f", server.geo.lat, server.geo.lon))
+
+            if let myLoc = myLocation {
+                let dist = server.geo.distance(to: myLoc)
+                InfoRow(label: "Distance",
+                        value: dist < 1 ? "<1 km" : dist < 1000 ? "\(Int(dist)) km" : String(format: "%.1f k km", dist / 1000),
+                        valueColor: distanceColor(dist))
+                InfoRow(label: "Latency estimate",
+                        value: estimatedLatency(dist))
+            }
+        }
+    }
+
+    // MARK: - Network / Organization
+
+    private var networkSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle("Network", icon: "building.2")
+
+            if !server.geo.org.isEmpty {
+                InfoRow(label: "Organization", value: server.geo.org)
+            }
+            if !server.geo.isp.isEmpty && server.geo.isp != server.geo.org {
+                InfoRow(label: "ISP", value: server.geo.isp)
+            }
+            if !server.geo.asNumber.isEmpty {
+                InfoRow(label: "AS Number", value: server.geo.asNumber)
+            }
+            InfoRow(label: "IP", value: server.geo.ip)
+        }
+    }
+
+    // MARK: - Connection stats
+
+    private var connectionsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle("Connections", icon: "arrow.left.arrow.right")
+
+            HStack(spacing: 16) {
+                StatPill(value: "\(server.connectionCount)", label: "Total", color: .accentColor)
+                ForEach(protocolCounts, id: \.proto) { item in
+                    StatPill(value: "\(item.count)", label: item.proto,
+                             color: item.proto == "TCP" ? .blue : .orange)
+                }
+            }
+
+            // State breakdown
+            HStack(spacing: 6) {
+                ForEach(stateCounts, id: \.state) { item in
+                    HStack(spacing: 3) {
+                        Circle()
+                            .fill(AppColors.color(for: item.state))
+                            .frame(width: 7, height: 7)
+                        Text("\(item.count)")
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                        Text(item.state.rawValue.lowercased())
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            // Ports used
+            let allPorts = Set(server.connections.map(\.remotePort)).sorted()
+            if !allPorts.isEmpty {
+                let portDisplay = allPorts.prefix(8).map { port -> String in
+                    if let label = server.connections.first(where: { $0.remotePort == port })?.portLabel {
+                        return "\(port)/\(label)"
+                    }
+                    return "\(port)"
+                }
+                InfoRow(label: "Ports",
+                        value: portDisplay.joined(separator: ", ") + (allPorts.count > 8 ? " …" : ""))
+            }
+        }
+    }
+
+    // MARK: - Applications
+
+    private var appsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle("Applications", icon: "app.badge")
+
+            ForEach(apps, id: \.name) { app in
+                HStack(spacing: 8) {
+                    Image(systemName: "app.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack {
+                            Text(app.name)
+                                .font(.callout)
+                                .fontWeight(.medium)
+                                .lineLimit(1)
+                            Spacer()
+                            Text("\(app.count)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1)
+                                .background(.quaternary, in: Capsule())
+                        }
+                        Text("ports: \(app.ports)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func sectionTitle(_ title: String, icon: String) -> some View {
+        Label(title, systemImage: icon)
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .foregroundStyle(.primary)
+    }
+
+    private func distanceColor(_ km: Double) -> Color {
+        if km < 500 { return .green }
+        if km < 3000 { return .orange }
+        return .red
+    }
+
+    /// Rough latency estimate based on distance (speed of light in fiber ≈ 200,000 km/s, RTT)
+    private func estimatedLatency(_ km: Double) -> String {
+        let oneWayMs = km / 200.0 // ~200 km/ms in fiber
+        let rtt = oneWayMs * 2
+        if rtt < 1 { return "<1 ms" }
+        return String(format: "~%.0f ms", rtt)
+    }
+}
+
+// MARK: - Reusable row components
+
+private struct InfoRow: View {
+    let label: String
+    let value: String
+    var valueColor: Color = .primary
+
+    var body: some View {
+        HStack(alignment: .top) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 90, alignment: .trailing)
+            Text(value)
+                .font(.caption)
+                .foregroundStyle(valueColor)
+                .textSelection(.enabled)
+            Spacer()
+        }
+    }
+}
+
+private struct StatPill: View {
+    let value: String
+    let label: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundStyle(color)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(minWidth: 40)
+    }
+}
+
+
