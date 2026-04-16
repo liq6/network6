@@ -79,6 +79,11 @@ cat > "$APP_DIR/Info.plist" << PLIST
 </plist>
 PLIST
 
+echo "🔏 Code signing..."
+codesign --force --deep --sign - "$DIST_DIR/Network6.app"
+echo "   Verifying signature..."
+codesign --verify --verbose "$DIST_DIR/Network6.app"
+
 echo "💿 Creating DMG..."
 mkdir -p "$DMG_DIR"
 cp -R "$DIST_DIR/Network6.app" "$DMG_DIR/"
